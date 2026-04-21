@@ -12,3 +12,4 @@ venv/
 dist/
 recon_*_plan.md
 recon-logos/
+feeds.txt
