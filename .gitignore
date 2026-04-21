@@ -11,3 +11,4 @@ venv/
 *.egg-info/
 dist/
 recon_*_plan.md
+recon-logos/
