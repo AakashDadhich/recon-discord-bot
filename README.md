@@ -1,4 +1,4 @@
-# Recon
+# Recon RSS (Discord Bot)
 
 Recon is a Discord bot that automatically polls RSS feeds and posts new articles as embeds to designated channels, organised by topic. It is managed entirely through Discord slash commands by authorised users, with no need to edit config files after initial setup.
 
