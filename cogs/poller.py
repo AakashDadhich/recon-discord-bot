@@ -106,7 +106,7 @@ class PollerCog(commands.Cog):
         self.last_poll_time = datetime.now(timezone.utc)
 
     async def _poll_feed(self, feed_row) -> None:
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         parsed = await loop.run_in_executor(
             None, feedparser.parse, feed_row["feed_url"]
         )
