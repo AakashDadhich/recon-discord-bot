@@ -1,0 +1,207 @@
+import asyncio
+from typing import Optional
+
+import discord
+import feedparser
+from discord import app_commands
+from discord.ext import commands
+
+import config
+import db
+
+
+COLOUR_CHOICES = [
+    app_commands.Choice(name="green", value="0x00FF00"),
+    app_commands.Choice(name="blue", value="0x0000FF"),
+    app_commands.Choice(name="red", value="0xFF0000"),
+    app_commands.Choice(name="pink", value="0xbc42f5"),
+    app_commands.Choice(name="yellow", value="0xe3f542"),
+    app_commands.Choice(name="purple", value="0x6c42f5"),
+]
+
+
+def _has_mod_role(interaction: discord.Interaction) -> bool:
+    return any(r.name == config.MOD_ROLE for r in interaction.user.roles)
+
+
+def _channel_list(guild: discord.Guild) -> str:
+    return ", ".join(f"#{c.name}" for c in guild.text_channels)
+
+
+def _find_channel(guild: discord.Guild, name: str) -> Optional[discord.TextChannel]:
+    return next((c for c in guild.text_channels if c.name == name), None)
+
+
+class FeedsCog(commands.Cog):
+    def __init__(self, bot: commands.Bot) -> None:
+        self.bot = bot
+
+    @app_commands.command(name="addfeed", description="Add an RSS feed to a channel")
+    @app_commands.describe(
+        channel="Channel name without #",
+        url="Full RSS feed URL",
+        colour="Accent colour for article embeds",
+    )
+    @app_commands.choices(colour=COLOUR_CHOICES)
+    async def addfeed(
+        self,
+        interaction: discord.Interaction,
+        channel: str,
+        url: str,
+        colour: app_commands.Choice[str],
+    ) -> None:
+        if not _has_mod_role(interaction):
+            await interaction.response.send_message(
+                "You don't have permission to use this command. ❌", ephemeral=True
+            )
+            return
+
+        target = _find_channel(interaction.guild, channel)
+        if target is None:
+            await interaction.response.send_message(
+                f"Channel not found. Valid channels are: {_channel_list(interaction.guild)} ❌",
+                ephemeral=True,
+            )
+            return
+
+        await interaction.response.defer(ephemeral=True)
+
+        loop = asyncio.get_event_loop()
+        parsed = await loop.run_in_executor(None, feedparser.parse, url)
+
+        if not parsed.entries:
+            await interaction.followup.send(
+                "Could not reach that RSS feed. Please check the URL and try again. ❌",
+                ephemeral=True,
+            )
+            return
+
+        if db.feed_exists(str(target.id), url):
+            await interaction.followup.send(
+                f"That feed is already registered to #{channel}. ❌",
+                ephemeral=True,
+            )
+            return
+
+        display_name = parsed.feed.get("title") or url
+        last_seen = getattr(parsed.entries[0], "link", None)
+
+        db.add_feed(
+            channel_id=str(target.id),
+            channel_name=target.name,
+            feed_url=url,
+            display_name=display_name,
+            colour=colour.value,
+            last_seen=last_seen,
+        )
+
+        await interaction.followup.send(
+            f"Feed added to #{channel}. ✅", ephemeral=True
+        )
+
+    @app_commands.command(name="removefeed", description="Remove a feed from a channel")
+    @app_commands.describe(
+        channel="Channel name without #",
+        url="Full RSS feed URL to remove",
+    )
+    async def removefeed(
+        self,
+        interaction: discord.Interaction,
+        channel: str,
+        url: str,
+    ) -> None:
+        if not _has_mod_role(interaction):
+            await interaction.response.send_message(
+                "You don't have permission to use this command. ❌", ephemeral=True
+            )
+            return
+
+        target = _find_channel(interaction.guild, channel)
+        if target is None:
+            await interaction.response.send_message(
+                f"Channel not found. Valid channels are: {_channel_list(interaction.guild)} ❌",
+                ephemeral=True,
+            )
+            return
+
+        removed = db.remove_feed(str(target.id), url)
+        if removed == 0:
+            await interaction.response.send_message(
+                f"No feed with that URL was found in #{channel}. ❌", ephemeral=True
+            )
+            return
+
+        await interaction.response.send_message(
+            f"Feed removed from #{channel}. ✅", ephemeral=True
+        )
+
+    @app_commands.command(name="listfeeds", description="Show all registered feeds")
+    async def listfeeds(self, interaction: discord.Interaction) -> None:
+        if not _has_mod_role(interaction):
+            await interaction.response.send_message(
+                "You don't have permission to use this command. ❌", ephemeral=True
+            )
+            return
+
+        feeds = db.get_all_feeds()
+        if not feeds:
+            await interaction.response.send_message(
+                "No feeds registered yet. Use /addfeed to get started. ❌",
+                ephemeral=True,
+            )
+            return
+
+        grouped: dict[str, list] = {}
+        for feed in feeds:
+            grouped.setdefault(feed["channel_name"], []).append(feed)
+
+        embed = discord.Embed(title="Recon - Active Feeds", colour=0x808080)
+        for channel_name, channel_feeds in grouped.items():
+            lines = []
+            for f in channel_feeds:
+                icon = "✅" if f["active"] == 1 else "❌"
+                name = f["display_name"] or f["feed_url"]
+                lines.append(f"{icon} {name}")
+            embed.add_field(
+                name=f"#{channel_name}",
+                value="\n".join(lines),
+                inline=False,
+            )
+
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    @app_commands.command(
+        name="check", description="Manually trigger an immediate feed poll"
+    )
+    @app_commands.describe(channel="Channel name without # (optional - omit to check all)")
+    async def check(
+        self,
+        interaction: discord.Interaction,
+        channel: Optional[str] = None,
+    ) -> None:
+        if not _has_mod_role(interaction):
+            await interaction.response.send_message(
+                "You don't have permission to use this command. ❌", ephemeral=True
+            )
+            return
+
+        target_channel_id = None
+        if channel is not None:
+            target = _find_channel(interaction.guild, channel)
+            if target is None:
+                await interaction.response.send_message(
+                    f"Channel not found. Valid channels are: {_channel_list(interaction.guild)} ❌",
+                    ephemeral=True,
+                )
+                return
+            target_channel_id = str(target.id)
+
+        await interaction.response.send_message("Checking feeds now... ✅", ephemeral=True)
+
+        poller_cog = self.bot.cogs.get("PollerCog")
+        if poller_cog is not None:
+            await poller_cog.run_poll(target_channel_id)
+
+
+async def setup(bot: commands.Bot) -> None:
+    await bot.add_cog(FeedsCog(bot))

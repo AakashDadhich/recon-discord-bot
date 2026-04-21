@@ -1,0 +1,13 @@
+.env
+.env.local
+*.db
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+.DS_Store
+*.egg-info/
+dist/
+recon_*_plan.md
