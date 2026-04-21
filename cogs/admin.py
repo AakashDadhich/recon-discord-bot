@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
@@ -7,6 +8,8 @@ from discord.ext import commands
 
 import config
 import db
+
+logger = logging.getLogger(__name__)
 
 
 def _has_mod_role(interaction: discord.Interaction) -> bool:
@@ -66,6 +69,7 @@ class AdminCog(commands.Cog):
             return
 
         db.set_active(str(target.id), 0)
+        logger.info("Feeds in #%s paused by %s", channel, interaction.user)
         await interaction.response.send_message(
             f"Feeds in #{channel} paused. ⏸️", ephemeral=True
         )
@@ -96,6 +100,7 @@ class AdminCog(commands.Cog):
             return
 
         db.set_active(str(target.id), 1)
+        logger.info("Feeds in #%s resumed by %s", channel, interaction.user)
         await interaction.response.send_message(
             f"Feeds in #{channel} resumed. ▶️", ephemeral=True
         )

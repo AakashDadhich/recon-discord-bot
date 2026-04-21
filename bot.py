@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import os
 import struct
 import zlib
@@ -7,6 +8,14 @@ from discord.ext import commands
 
 import config
 import db
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+
+logger = logging.getLogger(__name__)
 
 
 def _generate_placeholder_png(path: str) -> None:
@@ -42,6 +51,7 @@ def _generate_placeholder_png(path: str) -> None:
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "wb") as f:
         f.write(png)
+    logger.info("Generated placeholder.png")
 
 
 class ReconBot(commands.Bot):
@@ -52,16 +62,20 @@ class ReconBot(commands.Bot):
 
     async def setup_hook(self) -> None:
         db.init_db()
+        logger.info("Database initialised")
+
         _generate_placeholder_png(os.path.join("assets", "placeholder.png"))
 
         await self.load_extension("cogs.poller")
         await self.load_extension("cogs.feeds")
         await self.load_extension("cogs.admin")
+        logger.info("Cogs loaded")
 
         await self.tree.sync()
+        logger.info("Slash commands synced")
 
     async def on_ready(self) -> None:
-        print(f"Recon is online as {self.user}")
+        logger.info("Recon is online as %s", self.user)
 
 
 def main() -> None:

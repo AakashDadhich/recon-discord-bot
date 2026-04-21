@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import os
 from datetime import datetime, timezone
 from typing import Optional
@@ -9,6 +10,7 @@ from discord.ext import commands, tasks
 
 import db
 
+logger = logging.getLogger(__name__)
 
 ASSETS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets")
 PLACEHOLDER_PATH = os.path.join(ASSETS_DIR, "placeholder.png")
@@ -95,29 +97,52 @@ class PollerCog(commands.Cog):
     async def before_poll(self) -> None:
         await self.bot.wait_until_ready()
 
+    @poll_feeds.error
+    async def on_poll_error(self, error: Exception) -> None:
+        logger.error("Unhandled error in poll loop", exc_info=error)
+
     async def run_poll(self, channel_id: Optional[str] = None) -> None:
         feeds = db.get_active_feeds()
         if channel_id:
             feeds = [f for f in feeds if f["channel_id"] == channel_id]
 
+        logger.info("Poll cycle starting - %d active feed(s)", len(feeds))
+
         for feed_row in feeds:
             await self._poll_feed(feed_row)
 
         self.last_poll_time = datetime.now(timezone.utc)
+        logger.info("Poll cycle complete")
 
     async def _poll_feed(self, feed_row) -> None:
+        display_name = feed_row["display_name"] or feed_row["feed_url"]
+        logger.debug("Fetching %s", feed_row["feed_url"])
+
         loop = asyncio.get_running_loop()
         parsed = await loop.run_in_executor(
             None, feedparser.parse, feed_row["feed_url"]
         )
 
         if parsed.bozo and not parsed.entries:
+            logger.warning(
+                "%s - feed unreachable (bozo: %s), marking inactive",
+                display_name,
+                parsed.bozo_exception,
+            )
             await self._handle_feed_down(feed_row)
             return
 
         if not parsed.entries:
+            logger.warning("%s - feed returned no entries, marking inactive", display_name)
             await self._handle_feed_down(feed_row)
             return
+
+        if parsed.bozo:
+            logger.warning(
+                "%s - feed parsed with bozo error but entries found, continuing (bozo: %s)",
+                display_name,
+                parsed.bozo_exception,
+            )
 
         entries = parsed.entries
         last_seen = feed_row["last_seen"]
@@ -130,20 +155,36 @@ class PollerCog(commands.Cog):
                 None,
             )
             if last_seen_index is None:
+                logger.info(
+                    "%s - last_seen not found in feed (likely scrolled off), posting latest entry only",
+                    display_name,
+                )
                 new_entries = [entries[0]]
             elif last_seen_index == 0:
                 new_entries = []
             else:
                 new_entries = list(reversed(entries[:last_seen_index]))
 
+        if not new_entries:
+            logger.info("%s - up to date", display_name)
+            return
+
+        logger.info("%s - %d new article(s)", display_name, len(new_entries))
+
         channel = self.bot.get_channel(int(feed_row["channel_id"]))
         if channel is None:
+            logger.warning(
+                "%s - channel ID %s not found, skipping",
+                display_name,
+                feed_row["channel_id"],
+            )
             return
 
         for entry in new_entries:
             embed = _build_article_embed(entry, feed_row)
             thumbnail_url = _get_entry_image(entry)
             file = None
+            title = getattr(entry, "title", "untitled")
 
             if not thumbnail_url:
                 file = discord.File(PLACEHOLDER_PATH, filename="placeholder.png")
@@ -154,7 +195,13 @@ class PollerCog(commands.Cog):
                     await channel.send(file=file, embed=embed)
                 else:
                     await channel.send(embed=embed)
-            except discord.HTTPException:
+            except discord.HTTPException as e:
+                logger.warning(
+                    "%s - failed to send article '%s' (%s), retrying in 5s",
+                    display_name,
+                    title,
+                    e,
+                )
                 await asyncio.sleep(5)
                 try:
                     if file:
@@ -162,24 +209,32 @@ class PollerCog(commands.Cog):
                         await channel.send(file=file, embed=embed)
                     else:
                         await channel.send(embed=embed)
-                except discord.HTTPException:
-                    pass
+                except discord.HTTPException as e2:
+                    logger.error(
+                        "%s - retry failed for article '%s' (%s), skipping",
+                        display_name,
+                        title,
+                        e2,
+                    )
 
-        if new_entries:
-            newest_url = getattr(entries[0], "link", last_seen)
-            db.update_last_seen(feed_row["id"], newest_url)
+        newest_url = getattr(entries[0], "link", last_seen)
+        db.update_last_seen(feed_row["id"], newest_url)
 
     async def _handle_feed_down(self, feed_row) -> None:
+        display_name = feed_row["display_name"] or feed_row["feed_url"]
         db.set_feed_active_by_id(feed_row["id"], 0)
+        logger.warning("%s - marked inactive", display_name)
+
         channel = self.bot.get_channel(int(feed_row["channel_id"]))
         if channel is None:
             return
-        display_name = feed_row["display_name"] or feed_row["feed_url"]
         embed = _build_feed_down_embed(display_name, feed_row["channel_name"])
         try:
             await channel.send(embed=embed)
-        except discord.HTTPException:
-            pass
+        except discord.HTTPException as e:
+            logger.error(
+                "%s - failed to send feed-down alert (%s)", display_name, e
+            )
 
 
 async def setup(bot: commands.Bot) -> None:

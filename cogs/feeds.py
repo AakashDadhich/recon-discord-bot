@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from typing import Optional
 
 import discord
@@ -9,6 +10,7 @@ from discord.ext import commands
 import config
 import db
 
+logger = logging.getLogger(__name__)
 
 COLOUR_CHOICES = [
     app_commands.Choice(name="green", value="0x00FF00"),
@@ -66,10 +68,11 @@ class FeedsCog(commands.Cog):
 
         await interaction.response.defer(ephemeral=True)
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         parsed = await loop.run_in_executor(None, feedparser.parse, url)
 
         if not parsed.entries:
+            logger.warning("Could not parse feed: %s", url)
             await interaction.followup.send(
                 "Could not reach that RSS feed. Please check the URL and try again. ❌",
                 ephemeral=True,
@@ -95,6 +98,7 @@ class FeedsCog(commands.Cog):
             last_seen=last_seen,
         )
 
+        logger.info("Feed added: %s (%s) -> #%s", display_name, url, channel)
         await interaction.followup.send(
             f"Feed added to #{channel}. ✅", ephemeral=True
         )
@@ -131,6 +135,7 @@ class FeedsCog(commands.Cog):
             )
             return
 
+        logger.info("Feed removed: %s from #%s", url, channel)
         await interaction.response.send_message(
             f"Feed removed from #{channel}. ✅", ephemeral=True
         )
@@ -196,6 +201,11 @@ class FeedsCog(commands.Cog):
                 return
             target_channel_id = str(target.id)
 
+        logger.info(
+            "/check triggered by %s for %s",
+            interaction.user,
+            f"#{channel}" if channel else "all channels",
+        )
         await interaction.response.send_message("Checking feeds now... ✅", ephemeral=True)
 
         poller_cog = self.bot.cogs.get("PollerCog")
