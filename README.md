@@ -1,4 +1,4 @@
-# Recon RSS (Discord Bot)
+# Recon
 
 Recon is a Discord bot that automatically polls RSS feeds and posts new articles as embeds to designated channels, organised by topic. It is managed entirely through Discord slash commands by authorised users, with no need to edit config files after initial setup.
 
@@ -17,37 +17,43 @@ Recon is a Discord bot that automatically polls RSS feeds and posts new articles
 ### Prerequisites
 
 - Python 3.11 or later
-- A Discord application and bot token (see below)
+- A Discord account with access to the [Discord Developer Portal](https://discord.com/developers/applications)
 
 ### Setup
 
-1. Clone this repository:
+1. **Create a Discord application and bot token:**
+   - Go to [discord.com/developers/applications](https://discord.com/developers/applications) and click **New Application**
+   - Navigate to the **Bot** tab and create a bot user
+   - Under **Privileged Gateway Intents**, enable **Server Members Intent** and **Message Content Intent**
+   - Click **Reset Token**, copy the token - you will need it in step 4
+
+2. **Clone this repository:**
    ```
-   git clone https://github.com/your-username/recon.git
-   cd recon
+   git clone https://github.com/AakashDadhich/recon-discord-bot.git
+   cd recon-discord-bot
    ```
 
-2. Copy `.env.example` to `.env` and fill in your values:
+3. **Create and activate a virtual environment:**
+   ```
+   python3 -m venv .venv
+   source .venv/bin/activate
+   ```
+   On Windows: `.venv\Scripts\activate`
+
+4. **Copy `.env.example` to `.env` and fill in your values:**
    ```
    cp .env.example .env
    ```
    Edit `.env` and set:
-   - `DISCORD_BOT_TOKEN` - your bot token from the Discord developer portal
+   - `DISCORD_BOT_TOKEN` - the token copied from the Discord developer portal
    - `DISCORD_MOD_ROLE` - the name of the Discord role that can manage the bot (e.g. `recon-admin`)
 
-3. Install dependencies:
+5. **Install dependencies:**
    ```
    pip install -r requirements.txt
    ```
 
-4. Create a Discord application and bot token:
-   - Go to https://discord.com/developers/applications
-   - Create a new application
-   - Navigate to the **Bot** tab and create a bot user
-   - Copy the token and paste it into your `.env` file
-   - Under **Privileged Gateway Intents**, enable **Server Members Intent** and **Message Content Intent**
-
-5. Run the bot:
+6. **Run the bot:**
    ```
    python bot.py
    ```
@@ -56,7 +62,7 @@ Recon is a Discord bot that automatically polls RSS feeds and posts new articles
 
 - In the Discord developer portal, go to **OAuth2 > URL Generator**
 - Select scopes: `bot` and `applications.commands`
-- Select permissions: **Send Messages**, **Embed Links**, **Read Message History**, **Manage Webhooks**
+- Select permissions: **Send Messages**, **Embed Links**, **Read Message History**
 - Copy the generated URL, open it in a browser, and select your server
 
 ## Required Permissions
@@ -66,7 +72,6 @@ Recon is a Discord bot that automatically polls RSS feeds and posts new articles
 | Send Messages | Post article embeds and feed alerts |
 | Embed Links | Required for rich embed formatting |
 | Read Message History | Required for Discord.py |
-| Manage Webhooks | Recommended for future webhook support |
 
 ## OAuth2 Scopes
 
