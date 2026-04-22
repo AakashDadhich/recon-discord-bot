@@ -1,7 +1,7 @@
 import asyncio
 import logging
-import os
 from datetime import datetime, timezone
+from html.parser import HTMLParser
 from typing import Optional
 
 import discord
@@ -11,9 +11,6 @@ from discord.ext import commands, tasks
 import db
 
 logger = logging.getLogger(__name__)
-
-ASSETS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets")
-PLACEHOLDER_PATH = os.path.join(ASSETS_DIR, "placeholder.png")
 
 
 def _get_entry_image(entry) -> Optional[str]:
@@ -26,6 +23,24 @@ def _get_entry_image(entry) -> Optional[str]:
             if enc.get("type", "").startswith("image/"):
                 return enc.get("url")
     return None
+
+
+class _HTMLStripper(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self._parts: list[str] = []
+
+    def handle_data(self, data: str) -> None:
+        self._parts.append(data)
+
+    def get_text(self) -> str:
+        return " ".join(self._parts).strip()
+
+
+def _strip_html(text: str) -> str:
+    stripper = _HTMLStripper()
+    stripper.feed(text)
+    return stripper.get_text()
 
 
 def _truncate(text: str, limit: int = 300) -> str:
@@ -46,7 +61,7 @@ def _build_article_embed(entry, feed_row: dict) -> discord.Embed:
     colour = int(feed_row["colour"], 16)
     title = getattr(entry, "title", "No title")
     link = getattr(entry, "link", "")
-    summary = getattr(entry, "summary", "")
+    summary = _strip_html(getattr(entry, "summary", ""))
 
     embed = discord.Embed(
         title=title,
@@ -57,10 +72,10 @@ def _build_article_embed(entry, feed_row: dict) -> discord.Embed:
 
     image_url = _get_entry_image(entry)
     if image_url:
-        embed.set_thumbnail(url=image_url)
+        embed.set_image(url=image_url)
 
     display_name = feed_row["display_name"] or "Unknown Feed"
-    embed.set_footer(text=f"{display_name} - {_format_published(entry)}")
+    embed.set_footer(text=f"{display_name} • {_format_published(entry)}")
     return embed
 
 
@@ -182,19 +197,10 @@ class PollerCog(commands.Cog):
 
         for entry in new_entries:
             embed = _build_article_embed(entry, feed_row)
-            thumbnail_url = _get_entry_image(entry)
-            file = None
             title = getattr(entry, "title", "untitled")
 
-            if not thumbnail_url:
-                file = discord.File(PLACEHOLDER_PATH, filename="placeholder.png")
-                embed.set_thumbnail(url="attachment://placeholder.png")
-
             try:
-                if file:
-                    await channel.send(file=file, embed=embed)
-                else:
-                    await channel.send(embed=embed)
+                await channel.send(embed=embed)
             except discord.HTTPException as e:
                 logger.warning(
                     "%s - failed to send article '%s' (%s), retrying in 5s",
@@ -204,11 +210,7 @@ class PollerCog(commands.Cog):
                 )
                 await asyncio.sleep(5)
                 try:
-                    if file:
-                        file = discord.File(PLACEHOLDER_PATH, filename="placeholder.png")
-                        await channel.send(file=file, embed=embed)
-                    else:
-                        await channel.send(embed=embed)
+                    await channel.send(embed=embed)
                 except discord.HTTPException as e2:
                     logger.error(
                         "%s - retry failed for article '%s' (%s), skipping",
