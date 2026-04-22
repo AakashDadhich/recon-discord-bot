@@ -56,6 +56,16 @@ def remove_feed(channel_id: str, feed_url: str) -> int:
         return cursor.rowcount
 
 
+def update_display_name(channel_id: str, current_name: str, new_name: str) -> int:
+    with _connect() as conn:
+        cursor = conn.execute(
+            "UPDATE feeds SET display_name = ? WHERE channel_id = ? AND display_name = ?",
+            (new_name, channel_id, current_name),
+        )
+        conn.commit()
+        return cursor.rowcount
+
+
 def get_all_feeds() -> list[sqlite3.Row]:
     with _connect() as conn:
         return conn.execute(

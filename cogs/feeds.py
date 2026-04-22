@@ -140,6 +140,46 @@ class FeedsCog(commands.Cog):
             f"Feed removed from #{channel}. ✅", ephemeral=True
         )
 
+    @app_commands.command(name="renamefeed", description="Set a custom display name for a feed")
+    @app_commands.describe(
+        channel="Channel name without #",
+        current_name="Current display name of the feed",
+        new_name="New display name",
+    )
+    async def renamefeed(
+        self,
+        interaction: discord.Interaction,
+        channel: str,
+        current_name: str,
+        new_name: str,
+    ) -> None:
+        if not _has_mod_role(interaction):
+            await interaction.response.send_message(
+                "You don't have permission to use this command. ❌", ephemeral=True
+            )
+            return
+
+        target = _find_channel(interaction.guild, channel)
+        if target is None:
+            await interaction.response.send_message(
+                f"Channel not found. Valid channels are: {_channel_list(interaction.guild)} ❌",
+                ephemeral=True,
+            )
+            return
+
+        updated = db.update_display_name(str(target.id), current_name, new_name)
+        if updated == 0:
+            await interaction.response.send_message(
+                f"No feed named '{current_name}' was found in #{channel}. ❌",
+                ephemeral=True,
+            )
+            return
+
+        logger.info("Feed renamed in #%s: '%s' -> '%s'", channel, current_name, new_name)
+        await interaction.response.send_message(
+            f"Feed renamed to **{new_name}**. ✅", ephemeral=True
+        )
+
     @app_commands.command(name="listfeeds", description="Show all registered feeds")
     async def listfeeds(self, interaction: discord.Interaction) -> None:
         if not _has_mod_role(interaction):

@@ -156,6 +156,7 @@ class AdminCog(commands.Cog):
         commands_list = [
             ("/addfeed [channel] [url] [colour]", "Add an RSS feed to a channel with a chosen colour. Colour options: green, blue, red, pink, yellow, purple"),
             ("/removefeed [channel] [url]", "Remove a feed from a channel"),
+            ("/renamefeed [channel] [current_name] [new_name]", "Set a custom display name for a feed"),
             ("/listfeeds", "Show all registered feeds and their status"),
             ("/pause [channel]", "Pause all feeds in a channel"),
             ("/resume [channel]", "Resume all feeds in a channel"),
