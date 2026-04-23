@@ -13,6 +13,11 @@ import db
 logger = logging.getLogger(__name__)
 
 
+def _entry_id(entry) -> Optional[str]:
+    """Prefer RSS guid/id over link — guid is typically stable across article updates."""
+    return getattr(entry, "id", None) or getattr(entry, "link", None)
+
+
 def _get_entry_image(entry) -> Optional[str]:
     if hasattr(entry, "media_thumbnail") and entry.media_thumbnail:
         return entry.media_thumbnail[0].get("url")
@@ -159,14 +164,19 @@ class PollerCog(commands.Cog):
                 parsed.bozo_exception,
             )
 
-        entries = parsed.entries
+        entries = sorted(
+            parsed.entries,
+            key=lambda e: (getattr(e, "published_parsed", None) or (0,), getattr(e, "title", "")),
+            reverse=True,
+        )
         last_seen = feed_row["last_seen"]
 
         if last_seen is None:
             new_entries = [entries[0]]
         else:
             last_seen_index = next(
-                (i for i, e in enumerate(entries) if getattr(e, "link", None) == last_seen),
+                (i for i, e in enumerate(entries)
+                 if _entry_id(e) == last_seen or getattr(e, "link", None) == last_seen),
                 None,
             )
             if last_seen_index is None:
@@ -219,7 +229,7 @@ class PollerCog(commands.Cog):
                         e2,
                     )
 
-        newest_url = getattr(entries[0], "link", last_seen)
+        newest_url = _entry_id(entries[0]) or last_seen
         db.update_last_seen(feed_row["id"], newest_url)
 
     async def _handle_feed_down(self, feed_row) -> None:

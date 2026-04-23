@@ -87,7 +87,8 @@ class FeedsCog(commands.Cog):
             return
 
         display_name = parsed.feed.get("title") or url
-        last_seen = getattr(parsed.entries[0], "link", None)
+        from cogs.poller import _entry_id
+        last_seen = _entry_id(parsed.entries[0])
 
         db.add_feed(
             channel_id=str(target.id),
