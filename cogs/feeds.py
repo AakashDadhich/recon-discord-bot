@@ -107,13 +107,13 @@ class FeedsCog(commands.Cog):
     @app_commands.command(name="removefeed", description="Remove a feed from a channel")
     @app_commands.describe(
         channel="Channel name without #",
-        url="Full RSS feed URL to remove",
+        name="Display name of the feed to remove",
     )
     async def removefeed(
         self,
         interaction: discord.Interaction,
         channel: str,
-        url: str,
+        name: str,
     ) -> None:
         if not _has_mod_role(interaction):
             await interaction.response.send_message(
@@ -129,14 +129,14 @@ class FeedsCog(commands.Cog):
             )
             return
 
-        removed = db.remove_feed(str(target.id), url)
+        removed = db.remove_feed_by_name(str(target.id), name)
         if removed == 0:
             await interaction.response.send_message(
-                f"No feed with that URL was found in #{channel}. ❌", ephemeral=True
+                f"No feed named '{name}' was found in #{channel}. ❌", ephemeral=True
             )
             return
 
-        logger.info("Feed removed: %s from #%s", url, channel)
+        logger.info("Feed removed: '%s' from #%s", name, channel)
         await interaction.response.send_message(
             f"Feed removed from #{channel}. ✅", ephemeral=True
         )

@@ -46,11 +46,11 @@ def add_feed(
         conn.commit()
 
 
-def remove_feed(channel_id: str, feed_url: str) -> int:
+def remove_feed_by_name(channel_id: str, display_name: str) -> int:
     with _connect() as conn:
         cursor = conn.execute(
-            "DELETE FROM feeds WHERE channel_id = ? AND feed_url = ?",
-            (channel_id, feed_url),
+            "DELETE FROM feeds WHERE channel_id = ? AND display_name = ?",
+            (channel_id, display_name),
         )
         conn.commit()
         return cursor.rowcount
