@@ -148,30 +148,33 @@ class PollerCog(commands.Cog):
         )
 
         if not parsed.entries:
-            count = self._empty_poll_counts.get(feed_row["id"], 0) + 1
-            self._empty_poll_counts[feed_row["id"]] = count
-            if parsed.bozo:
-                logger.warning(
-                    "%s - feed empty with bozo (%s) [%d/%d]",
-                    display_name,
-                    parsed.bozo_exception,
-                    count,
-                    EMPTY_POLL_THRESHOLD,
-                )
+            if feed_row["never_auto_pause"]:
+                logger.info("%s - feed returned no entries (auto-pause disabled)", display_name)
             else:
-                logger.info(
-                    "%s - feed returned no entries [%d/%d]",
-                    display_name,
-                    count,
-                    EMPTY_POLL_THRESHOLD,
-                )
-            if count >= EMPTY_POLL_THRESHOLD:
-                logger.warning(
-                    "%s - empty for %d consecutive polls, marking inactive",
-                    display_name,
-                    count,
-                )
-                await self._handle_feed_down(feed_row)
+                count = self._empty_poll_counts.get(feed_row["id"], 0) + 1
+                self._empty_poll_counts[feed_row["id"]] = count
+                if parsed.bozo:
+                    logger.warning(
+                        "%s - feed empty with bozo (%s) [%d/%d]",
+                        display_name,
+                        parsed.bozo_exception,
+                        count,
+                        EMPTY_POLL_THRESHOLD,
+                    )
+                else:
+                    logger.info(
+                        "%s - feed returned no entries [%d/%d]",
+                        display_name,
+                        count,
+                        EMPTY_POLL_THRESHOLD,
+                    )
+                if count >= EMPTY_POLL_THRESHOLD:
+                    logger.warning(
+                        "%s - empty for %d consecutive polls, marking inactive",
+                        display_name,
+                        count,
+                    )
+                    await self._handle_feed_down(feed_row)
             return
 
         self._empty_poll_counts.pop(feed_row["id"], None)

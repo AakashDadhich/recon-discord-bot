@@ -24,6 +24,12 @@ def init_db() -> None:
                 active       INTEGER NOT NULL DEFAULT 1
             )
         """)
+        try:
+            conn.execute(
+                "ALTER TABLE feeds ADD COLUMN never_auto_pause INTEGER NOT NULL DEFAULT 0"
+            )
+        except Exception:
+            pass
         conn.commit()
 
 
@@ -122,6 +128,16 @@ def get_active_feeds() -> list[sqlite3.Row]:
         return conn.execute(
             "SELECT * FROM feeds WHERE active = 1"
         ).fetchall()
+
+
+def set_never_auto_pause_by_channel(channel_id: str, value: int) -> int:
+    with _connect() as conn:
+        cursor = conn.execute(
+            "UPDATE feeds SET never_auto_pause = ? WHERE channel_id = ?",
+            (value, channel_id),
+        )
+        conn.commit()
+        return cursor.rowcount
 
 
 def get_feed_counts() -> tuple[int, int]:

@@ -222,6 +222,44 @@ class FeedsCog(commands.Cog):
 
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
+    @app_commands.command(name="setautopause", description="Enable or disable auto-pausing of empty feeds in a channel")
+    @app_commands.describe(
+        channel="Channel name without #",
+        enabled="True = pause after repeated empties (default). False = never auto-pause.",
+    )
+    async def setautopause(
+        self,
+        interaction: discord.Interaction,
+        channel: str,
+        enabled: bool,
+    ) -> None:
+        if not _has_mod_role(interaction):
+            await interaction.response.send_message(
+                "You don't have permission to use this command. ❌", ephemeral=True
+            )
+            return
+
+        target = _find_channel(interaction.guild, channel)
+        if target is None:
+            await interaction.response.send_message(
+                f"Channel not found. Valid channels are: {_channel_list(interaction.guild)} ❌",
+                ephemeral=True,
+            )
+            return
+
+        count = db.set_never_auto_pause_by_channel(str(target.id), 0 if enabled else 1)
+        if count == 0:
+            await interaction.response.send_message(
+                f"No feeds found in #{channel}. ❌", ephemeral=True
+            )
+            return
+
+        state = "will auto-pause after repeated empty polls" if enabled else "will never auto-pause"
+        logger.info("Auto-pause %s for #%s (%d feed(s))", "enabled" if enabled else "disabled", channel, count)
+        await interaction.response.send_message(
+            f"{count} feed(s) in #{channel} {state}. ✅", ephemeral=True
+        )
+
     @app_commands.command(
         name="check", description="Manually trigger an immediate feed poll"
     )
