@@ -99,11 +99,15 @@ def _build_feed_down_embed(display_name: str, channel_name: str) -> discord.Embe
     return embed
 
 
+EMPTY_POLL_THRESHOLD = 3
+
+
 class PollerCog(commands.Cog):
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
         self.start_time: datetime = datetime.now(timezone.utc)
         self.last_poll_time: Optional[datetime] = None
+        self._empty_poll_counts: dict[int, int] = {}
         self.poll_feeds.start()
 
     def cog_unload(self) -> None:
@@ -143,19 +147,34 @@ class PollerCog(commands.Cog):
             None, feedparser.parse, feed_row["feed_url"]
         )
 
-        if parsed.bozo and not parsed.entries:
-            logger.warning(
-                "%s - feed unreachable (bozo: %s), marking inactive",
-                display_name,
-                parsed.bozo_exception,
-            )
-            await self._handle_feed_down(feed_row)
+        if not parsed.entries:
+            count = self._empty_poll_counts.get(feed_row["id"], 0) + 1
+            self._empty_poll_counts[feed_row["id"]] = count
+            if parsed.bozo:
+                logger.warning(
+                    "%s - feed empty with bozo (%s) [%d/%d]",
+                    display_name,
+                    parsed.bozo_exception,
+                    count,
+                    EMPTY_POLL_THRESHOLD,
+                )
+            else:
+                logger.info(
+                    "%s - feed returned no entries [%d/%d]",
+                    display_name,
+                    count,
+                    EMPTY_POLL_THRESHOLD,
+                )
+            if count >= EMPTY_POLL_THRESHOLD:
+                logger.warning(
+                    "%s - empty for %d consecutive polls, marking inactive",
+                    display_name,
+                    count,
+                )
+                await self._handle_feed_down(feed_row)
             return
 
-        if not parsed.entries:
-            logger.warning("%s - feed returned no entries, marking inactive", display_name)
-            await self._handle_feed_down(feed_row)
-            return
+        self._empty_poll_counts.pop(feed_row["id"], None)
 
         if parsed.bozo:
             logger.warning(
@@ -235,6 +254,7 @@ class PollerCog(commands.Cog):
     async def _handle_feed_down(self, feed_row) -> None:
         display_name = feed_row["display_name"] or feed_row["feed_url"]
         db.set_feed_active_by_id(feed_row["id"], 0)
+        self._empty_poll_counts.pop(feed_row["id"], None)
         logger.warning("%s - marked inactive", display_name)
 
         channel = self.bot.get_channel(int(feed_row["channel_id"]))

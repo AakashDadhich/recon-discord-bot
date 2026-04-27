@@ -71,7 +71,7 @@ class FeedsCog(commands.Cog):
         loop = asyncio.get_running_loop()
         parsed = await loop.run_in_executor(None, feedparser.parse, url)
 
-        if not parsed.entries:
+        if (parsed.bozo and not parsed.entries) or not parsed.version:
             logger.warning("Could not parse feed: %s", url)
             await interaction.followup.send(
                 "Could not reach that RSS feed. Please check the URL and try again. ❌",
@@ -88,7 +88,7 @@ class FeedsCog(commands.Cog):
 
         display_name = parsed.feed.get("title") or url
         from cogs.poller import _entry_id
-        last_seen = _entry_id(parsed.entries[0])
+        last_seen = _entry_id(parsed.entries[0]) if parsed.entries else None
 
         db.add_feed(
             channel_id=str(target.id),
@@ -100,9 +100,15 @@ class FeedsCog(commands.Cog):
         )
 
         logger.info("Feed added: %s (%s) -> #%s", display_name, url, channel)
-        await interaction.followup.send(
-            f"Feed added to #{channel}. ✅", ephemeral=True
-        )
+        if not parsed.entries:
+            await interaction.followup.send(
+                f"Feed added to #{channel}. No upcoming events are currently listed. ✅",
+                ephemeral=True,
+            )
+        else:
+            await interaction.followup.send(
+                f"Feed added to #{channel}. ✅", ephemeral=True
+            )
 
     @app_commands.command(name="removefeed", description="Remove a feed from a channel")
     @app_commands.describe(
