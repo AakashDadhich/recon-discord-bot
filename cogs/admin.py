@@ -74,9 +74,9 @@ class AdminCog(commands.Cog):
             f"Feeds in #{channel} paused. ⏸️", ephemeral=True
         )
 
-    @app_commands.command(name="resume", description="Resume all paused feeds in a channel")
+    @app_commands.command(name="resumeall", description="Resume all paused feeds in a channel")
     @app_commands.describe(channel="Channel name without #")
-    async def resume(self, interaction: discord.Interaction, channel: str) -> None:
+    async def resumeall(self, interaction: discord.Interaction, channel: str) -> None:
         if not _has_mod_role(interaction):
             await interaction.response.send_message(
                 "You don't have permission to use this command. ❌", ephemeral=True
@@ -100,9 +100,9 @@ class AdminCog(commands.Cog):
             return
 
         db.set_active(str(target.id), 1)
-        logger.info("Feeds in #%s resumed by %s", channel, interaction.user)
+        logger.info("All feeds in #%s resumed by %s", channel, interaction.user)
         await interaction.response.send_message(
-            f"Feeds in #{channel} resumed. ▶️", ephemeral=True
+            f"All feeds in #{channel} resumed. ▶️", ephemeral=True
         )
 
     @app_commands.command(name="recon", description="Show bot status and uptime")
@@ -159,7 +159,8 @@ class AdminCog(commands.Cog):
             ("/renamefeed [channel] [current_name] [new_name]", "Set a custom display name for a feed"),
             ("/listfeeds", "Show all registered feeds and their status"),
             ("/pause [channel]", "Pause all feeds in a channel"),
-            ("/resume [channel]", "Resume all feeds in a channel"),
+            ("/resumeall [channel]", "Resume all paused feeds in a channel"),
+            ("/resumefeed [channel] [feed_name]", "Reactivate a single paused feed"),
             ("/check [channel?]", "Manually trigger a feed check (omit channel to check all)"),
             ("/recon", "Show bot status and uptime"),
             ("/help", "Show this command list"),

@@ -147,6 +147,43 @@ class FeedsCog(commands.Cog):
             f"Feed removed from #{channel}. ✅", ephemeral=True
         )
 
+    @app_commands.command(name="resumefeed", description="Reactivate a single paused feed")
+    @app_commands.describe(
+        channel="Channel name without #",
+        name="Display name of the feed to reactivate",
+    )
+    async def resumefeed(
+        self,
+        interaction: discord.Interaction,
+        channel: str,
+        name: str,
+    ) -> None:
+        if not _has_mod_role(interaction):
+            await interaction.response.send_message(
+                "You don't have permission to use this command. ❌", ephemeral=True
+            )
+            return
+
+        target = _find_channel(interaction.guild, channel)
+        if target is None:
+            await interaction.response.send_message(
+                f"Channel not found. Valid channels are: {_channel_list(interaction.guild)} ❌",
+                ephemeral=True,
+            )
+            return
+
+        updated = db.set_feed_active_by_name(str(target.id), name, 1)
+        if updated == 0:
+            await interaction.response.send_message(
+                f"No feed named '{name}' was found in #{channel}. ❌", ephemeral=True
+            )
+            return
+
+        logger.info("Feed '%s' in #%s reactivated by %s", name, channel, interaction.user)
+        await interaction.response.send_message(
+            f"**{name}** reactivated in #{channel}. ✅", ephemeral=True
+        )
+
     @app_commands.command(name="renamefeed", description="Set a custom display name for a feed")
     @app_commands.describe(
         channel="Channel name without #",

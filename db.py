@@ -130,6 +130,16 @@ def get_active_feeds() -> list[sqlite3.Row]:
         ).fetchall()
 
 
+def set_feed_active_by_name(channel_id: str, display_name: str, active: int) -> int:
+    with _connect() as conn:
+        cursor = conn.execute(
+            "UPDATE feeds SET active = ? WHERE channel_id = ? AND display_name = ?",
+            (active, channel_id, display_name),
+        )
+        conn.commit()
+        return cursor.rowcount
+
+
 def set_never_auto_pause_by_channel(channel_id: str, value: int) -> int:
     with _connect() as conn:
         cursor = conn.execute(

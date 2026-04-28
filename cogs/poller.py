@@ -88,8 +88,9 @@ def _build_feed_down_embed(display_name: str, channel_name: str) -> discord.Embe
     embed = discord.Embed(
         title="Feed Unreachable",
         description=(
-            f"The '{display_name}' feed could not be reached and has been paused. "
-            f"Use /resume {channel_name} to reactivate it once the feed is back online."
+            f"**{display_name}** could not be reached after repeated polls and has been paused. "
+            f"Other feeds in #{channel_name} are unaffected.\n"
+            f"Use `/resumefeed {channel_name} {display_name}` to reactivate it once the feed is back online."
         ),
         colour=0xFF0000,
     )
